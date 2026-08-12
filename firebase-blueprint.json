@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "users": {
+      "title": "users",
+      "description": "Pengguna sistem dan administrator",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" }
+      }
+    },
+    "schools": {
+      "title": "schools",
+      "description": "Daftar sekolah dasar mitra",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "day_of_week": { "type": "string" }
+      }
+    },
+    "academic_years": {
+      "title": "academic_years",
+      "description": "Tahun ajaran kegiatan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "semesters": {
+      "title": "semesters",
+      "description": "Semester dalam tahun ajaran",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "programs": {
+      "title": "programs",
+      "description": "Program silabus ekstrakurikuler",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "students": {
+      "title": "students",
+      "description": "Siswa-siswi peserta ekstrakurikuler",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "full_name": { "type": "string" },
+        "school_id": { "type": "string" }
+      }
+    },
+    "meetings": {
+      "title": "meetings",
+      "description": "Pertemuan mingguan dan jurnal kegiatan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "school_id": { "type": "string" },
+        "meeting_number": { "type": "number" },
+        "status": { "type": "string" }
+      }
+    },
+    "attendances": {
+      "title": "attendances",
+      "description": "Kehadiran siswa per pertemuan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "meeting_id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "practice_assessments": {
+      "title": "practice_assessments",
+      "description": "Penilaian praktik siswa per pertemuan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "meeting_id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "total_score": { "type": "number" }
+      }
+    },
+    "audit_logs": {
+      "title": "audit_logs",
+      "description": "Catatan riwayat aksi pengguna",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_name": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Ekstrakurikuler Robotika & Coding",
+  "description": "Sistem Manajemen Ekstrakurikuler Robotika & Coding SD untuk Super Admin: Kelola Sekolah, Siswa, Silabus, Pertemuan Aktual, Presensi, Pretest, Penilaian Praktik & Laporan PDF/Excel",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
