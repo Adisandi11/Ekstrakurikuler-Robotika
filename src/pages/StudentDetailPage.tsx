@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, User as UserIcon, Calendar, Award, CheckCircle2, TrendingUp, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, FileText } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { apiService } from '../services/api';
-import { Student, Attendance, PretestScore, PracticeAssessment } from '../types';
+import { Attendance, PretestScore, PracticeAssessment } from '../types';
 import { useApp } from '../context/AppContext';
-import { ConfirmDeleteModal } from '../components/common/ConfirmDeleteModal';
 
 interface StudentDetailPageProps {
   studentId: string;
@@ -13,8 +15,6 @@ interface StudentDetailPageProps {
 export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({ studentId, onBack }) => {
   const [student, setStudent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
   const { showToast } = useApp();
 
   useEffect(() => {
@@ -30,21 +30,6 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({ studentId,
       console.error(e);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const confirmDeleteStudent = async () => {
-    if (!student) return;
-    setDeleteLoading(true);
-    try {
-      await apiService.deleteStudent(student.id);
-      showToast('Data siswa berhasil dihapus.');
-      setDeleteModalOpen(false);
-      onBack();
-    } catch (err: any) {
-      showToast('Gagal menghapus data siswa.', 'error');
-    } finally {
-      setDeleteLoading(false);
     }
   };
 
@@ -65,13 +50,108 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({ studentId,
   const sakitCount = attendances.filter(a => a.status === 'sakit').length;
   const alphaCount = attendances.filter(a => a.status === 'alpha').length;
 
+  const handleExportExcel = () => {
+    if (!student) return;
+
+    const headerInfo = [
+      { 'Pertemuan': 'NAMA SISWA', 'Status Presensi': student.full_name },
+      { 'Pertemuan': 'NIS', 'Status Presensi': student.student_number },
+      { 'Pertemuan': 'KELAS', 'Status Presensi': student.class_name },
+      { 'Pertemuan': 'SEKOLAH', 'Status Presensi': student.school_name || '-' },
+      { 'Pertemuan': 'RINGKASAN KEHADIRAN', 'Status Presensi': `Hadir: ${hadirCount}, Izin: ${izinCount}, Sakit: ${sakitCount}, Alpha: ${alphaCount}` },
+      { 'Pertemuan': '', 'Status Presensi': '' }
+    ];
+
+    const meetingRows = Array.from({ length: 24 }).map((_, i) => {
+      const meetingNum = i + 1;
+      const att = attendances[i];
+      const pts = pretestScores[i];
+      const pra = practiceAssessments[i];
+
+      return {
+        'Pertemuan': `Pertemuan #${meetingNum}`,
+        'Status Presensi': att ? att.status.toUpperCase() : 'Belum Terlaksana',
+        'Nilai Pretest': pts?.score !== null && pts?.score !== undefined ? pts.score : '-',
+        'Nilai Praktik Total': pra?.total_score !== undefined ? pra.total_score : '-',
+        'Predikat Praktik': pra?.predicate || '-'
+      };
+    });
+
+    const exportData = [...headerInfo, ...meetingRows];
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    ws['!cols'] = [
+      { wch: 20 },
+      { wch: 22 },
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 20 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Histori & Raport');
+
+    const sanitizedName = student.full_name.replace(/[^a-zA-Z0-9]/g, '_');
+    XLSX.writeFile(wb, `Raport_Siswa_${sanitizedName}.xlsx`);
+    showToast('Histori dan Raport siswa berhasil diexport ke Excel.');
+  };
+
+  const handleExportPDF = () => {
+    if (!student) return;
+
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RAPORT INDIVIDUAL EKSTRAKURIKULER ROBOTIKA & CODING', 14, 15);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Sekolah: ${student.school_name || '-'}`, 14, 23);
+    doc.text(`Nama Siswa: ${student.full_name}`, 14, 29);
+    doc.text(`NIS: ${student.student_number}  |  Kelas: ${student.class_name}`, 14, 35);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Ringkasan Kehadiran: Hadir (${hadirCount}) | Izin (${izinCount}) | Sakit (${sakitCount}) | Alpha (${alphaCount})`, 14, 43);
+
+    const tableHeaders = [['Pertemuan', 'Status Presensi', 'Nilai Pretest', 'Nilai Praktik Total', 'Predikat Praktik']];
+    const tableBody = Array.from({ length: 24 }).map((_, i) => {
+      const meetingNum = i + 1;
+      const att = attendances[i];
+      const pts = pretestScores[i];
+      const pra = practiceAssessments[i];
+
+      return [
+        `Pertemuan #${meetingNum}`,
+        att ? att.status.toUpperCase() : 'Belum terlaksana',
+        pts?.score !== null && pts?.score !== undefined ? pts.score : '-',
+        pra?.total_score !== undefined ? pra.total_score : '-',
+        pra?.predicate || '-'
+      ];
+    });
+
+    autoTable(doc, {
+      head: tableHeaders,
+      body: tableBody,
+      startY: 48,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] },
+      styles: { fontSize: 8, cellPadding: 2 }
+    });
+
+    const sanitizedName = student.full_name.replace(/[^a-zA-Z0-9]/g, '_');
+    doc.save(`Raport_Siswa_${sanitizedName}.pdf`);
+    showToast('Raport PDF berhasil didownload.');
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -83,13 +163,22 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({ studentId,
           </div>
         </div>
 
-        <button
-          onClick={() => setDeleteModalOpen(true)}
-          className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs flex items-center space-x-1.5 transition-colors"
-        >
-          <Trash2 className="w-4 h-4" />
-          <span>Hapus Siswa</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleExportExcel}
+            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold rounded-xl text-xs flex items-center space-x-1.5 transition-colors shadow-xs"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Export Excel</span>
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-xl text-xs flex items-center space-x-1.5 transition-colors shadow-xs"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Export PDF</span>
+          </button>
+        </div>
       </div>
 
       {/* Student Card */}
@@ -172,16 +261,7 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({ studentId,
           </table>
         </div>
       </div>
-
-      <ConfirmDeleteModal
-        isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
-        onConfirm={confirmDeleteStudent}
-        title="Hapus Data Siswa"
-        message="Apakah Anda yakin ingin menghapus data siswa ini? Seluruh histori presensi dan rekam nilai akan terhapus."
-        itemName={`${student.full_name} (${student.student_number})`}
-        loading={deleteLoading}
-      />
     </div>
   );
 };
+
