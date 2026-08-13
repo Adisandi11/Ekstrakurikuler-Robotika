@@ -1,27 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, disableNetwork } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
 
 let dbInstance: ReturnType<typeof getFirestore> | null = null;
 let isQuotaExhausted = false;
-const QUOTA_FLAG_FILE = path.join(process.cwd(), '.firestore_quota_exhausted');
-
-// Check if quota exhaustion flag was recorded in the last 12 hours
-try {
-  if (fs.existsSync(QUOTA_FLAG_FILE)) {
-    const stat = fs.statSync(QUOTA_FLAG_FILE);
-    const ageMs = Date.now() - stat.mtimeMs;
-    if (ageMs < 12 * 3600 * 1000) {
-      isQuotaExhausted = true;
-      console.warn('⚠️ Firestore quota limit previously exceeded within 12 hours. Using local database fallback.');
-    } else {
-      fs.unlinkSync(QUOTA_FLAG_FILE);
-    }
-  }
-} catch (e) {
-  // ignore filesystem check error
-}
+let lastQuotaErrorTime = 0;
 
 try {
   const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
@@ -34,10 +18,6 @@ try {
       dbInstance = getFirestore(app);
     }
     console.log('🔥 Firebase initialized successfully with project:', firebaseConfig.projectId);
-
-    if (isQuotaExhausted && dbInstance) {
-      disableNetwork(dbInstance).catch(() => {});
-    }
   }
 } catch (err) {
   console.error('Error initializing Firebase:', err);
@@ -54,24 +34,32 @@ function isQuotaError(err: any): boolean {
 function handleQuotaExhausted(err: any) {
   if (isQuotaError(err)) {
     isQuotaExhausted = true;
-    try {
-      fs.writeFileSync(QUOTA_FLAG_FILE, new Date().toISOString(), 'utf-8');
-    } catch (e) {
-      // ignore write error
-    }
-    if (dbInstance) {
-      disableNetwork(dbInstance).catch(() => {});
-    }
-    console.warn('⚠️ Firestore quota limit exceeded. Disabling network sync & switching to local storage.');
+    lastQuotaErrorTime = Date.now();
+    console.warn('⚠️ Firestore quota limit exceeded. Temporary fallback to local storage until quota resets.');
   }
 }
 
+// Check if 2 hours passed since quota error to attempt re-enabling cloud sync
+function canAttemptCloudSync(): boolean {
+  if (!firestore) return false;
+  if (isQuotaExhausted) {
+    // If 2 hours have passed, retry cloud sync
+    if (Date.now() - lastQuotaErrorTime > 2 * 3600 * 1000) {
+      isQuotaExhausted = false;
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+
 export async function fetchFromFirestore(): Promise<any | null> {
-  if (!firestore || isQuotaExhausted) return null;
+  if (!canAttemptCloudSync()) return null;
   try {
-    const docRef = doc(firestore, 'app_data', 'main');
+    const docRef = doc(firestore!, 'app_data', 'main');
     const snap = await getDoc(docRef);
     if (snap.exists()) {
+      isQuotaExhausted = false; // Successfully read from cloud!
       return snap.data();
     }
   } catch (err: any) {
@@ -87,10 +75,21 @@ export async function fetchFromFirestore(): Promise<any | null> {
 let saveTimeout: NodeJS.Timeout | null = null;
 let latestDataToSave: any = null;
 
-export async function saveToFirestore(data: any): Promise<boolean> {
-  if (!firestore || isQuotaExhausted) return false;
+function sanitizeDataForFirestore(data: any): any {
+  if (!data || typeof data !== 'object') return data;
+  const cloned = JSON.parse(JSON.stringify(data));
+  
+  // Keep audit logs trimmed to max 50 to avoid hitting 1MB document limit
+  if (Array.isArray(cloned.audit_logs) && cloned.audit_logs.length > 50) {
+    cloned.audit_logs = cloned.audit_logs.slice(-50);
+  }
+  return cloned;
+}
 
-  latestDataToSave = data;
+export async function saveToFirestore(data: any): Promise<boolean> {
+  if (!canAttemptCloudSync()) return false;
+
+  latestDataToSave = sanitizeDataForFirestore(data);
 
   if (saveTimeout) {
     clearTimeout(saveTimeout);
@@ -98,13 +97,14 @@ export async function saveToFirestore(data: any): Promise<boolean> {
 
   return new Promise((resolve) => {
     saveTimeout = setTimeout(async () => {
-      if (!firestore || !latestDataToSave || isQuotaExhausted) {
+      if (!firestore || !latestDataToSave || !canAttemptCloudSync()) {
         resolve(false);
         return;
       }
       try {
-        const docRef = doc(firestore, 'app_data', 'main');
+        const docRef = doc(firestore!, 'app_data', 'main');
         await setDoc(docRef, latestDataToSave);
+        isQuotaExhausted = false; // Successfully saved to cloud!
         resolve(true);
       } catch (err: any) {
         if (isQuotaError(err)) {
@@ -117,5 +117,6 @@ export async function saveToFirestore(data: any): Promise<boolean> {
     }, 1500);
   });
 }
+
 
 

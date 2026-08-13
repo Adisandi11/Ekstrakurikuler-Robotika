@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: sistem-ekstrakulikuler
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start

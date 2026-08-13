@@ -392,7 +392,7 @@ class JSONDatabase {
     const schools: School[] = [
       {
         id: 'sch-1',
-        name: 'SDIT RMK',
+        name: 'SD IT Radhiyatam Mardhiyah',
         address: 'Jl. RMK No. 12, Kelapa Gading, Jakarta Utara',
         logo: 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=150&auto=format&fit=crop&q=80',
         day_of_week: 'Jumat',
