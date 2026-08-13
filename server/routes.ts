@@ -186,7 +186,7 @@ router.get('/schools/:id', authMiddleware, (req: Request, res: Response) => {
   res.json(school);
 });
 
-router.post('/schools', authMiddleware, (req: Request, res: Response) => {
+router.post('/schools', authMiddleware, async (req: Request, res: Response) => {
   const { name, address, logo, day_of_week, start_time, end_time } = req.body;
   if (!name || !day_of_week || !start_time || !end_time) {
     res.status(400).json({ message: 'Nama sekolah, hari kegiatan, dan jam wajib diisi.' });
@@ -209,7 +209,7 @@ router.post('/schools', authMiddleware, (req: Request, res: Response) => {
   };
 
   data.schools.push(newSchool);
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Tambah Sekolah', `Menambahkan sekolah baru: ${name}`);
@@ -217,7 +217,7 @@ router.post('/schools', authMiddleware, (req: Request, res: Response) => {
   res.status(201).json(newSchool);
 });
 
-router.put('/schools/:id', authMiddleware, (req: Request, res: Response) => {
+router.put('/schools/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const schoolIndex = data.schools.findIndex(s => s.id === req.params.id);
   if (schoolIndex === -1) {
@@ -233,7 +233,7 @@ router.put('/schools/:id', authMiddleware, (req: Request, res: Response) => {
   };
 
   data.schools[schoolIndex] = updated;
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Edit Sekolah', `Memperbarui data sekolah: ${updated.name}`);
@@ -241,7 +241,7 @@ router.put('/schools/:id', authMiddleware, (req: Request, res: Response) => {
   res.json(updated);
 });
 
-router.patch('/schools/:id/toggle-active', authMiddleware, (req: Request, res: Response) => {
+router.patch('/schools/:id/toggle-active', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const school = data.schools.find(s => s.id === req.params.id);
   if (!school) {
@@ -251,7 +251,7 @@ router.patch('/schools/:id/toggle-active', authMiddleware, (req: Request, res: R
 
   school.is_active = !school.is_active;
   school.updated_at = new Date().toISOString();
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Status Sekolah', `Mengubah status ${school.name} menjadi ${school.is_active ? 'Aktif' : 'Non-aktif'}`);
@@ -265,7 +265,7 @@ router.get('/academic-years', authMiddleware, (req: Request, res: Response) => {
   res.json(data.academic_years);
 });
 
-router.post('/academic-years', authMiddleware, (req: Request, res: Response) => {
+router.post('/academic-years', authMiddleware, async (req: Request, res: Response) => {
   const { name, start_date, end_date, status } = req.body;
   if (!name || !start_date || !end_date) {
     res.status(400).json({ message: 'Nama tahun ajaran, tanggal mulai, dan selesai wajib diisi.' });
@@ -290,7 +290,7 @@ router.post('/academic-years', authMiddleware, (req: Request, res: Response) => 
   };
 
   data.academic_years.push(newAY);
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Tambah Tahun Ajaran', `Menambahkan tahun ajaran: ${name}`);
@@ -298,7 +298,7 @@ router.post('/academic-years', authMiddleware, (req: Request, res: Response) => 
   res.status(201).json(newAY);
 });
 
-router.put('/academic-years/:id', authMiddleware, (req: Request, res: Response) => {
+router.put('/academic-years/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const ay = data.academic_years.find(a => a.id === req.params.id);
   if (!ay) {
@@ -307,14 +307,14 @@ router.put('/academic-years/:id', authMiddleware, (req: Request, res: Response) 
   }
 
   Object.assign(ay, req.body, { updated_at: new Date().toISOString() });
-  db.save();
+  await db.save();
   res.json(ay);
 });
 
-router.patch('/academic-years/:id/set-active', authMiddleware, (req: Request, res: Response) => {
+router.patch('/academic-years/:id/set-active', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   data.academic_years.forEach(ay => ay.status = ay.id === req.params.id ? 'active' : 'inactive');
-  db.save();
+  await db.save();
   res.json({ message: 'Tahun ajaran aktif berhasil diperbarui.' });
 });
 
@@ -324,7 +324,7 @@ router.get('/semesters', authMiddleware, (req: Request, res: Response) => {
   res.json(data.semesters);
 });
 
-router.post('/semesters', authMiddleware, (req: Request, res: Response) => {
+router.post('/semesters', authMiddleware, async (req: Request, res: Response) => {
   const { academic_year_id, name, start_date, end_date, status } = req.body;
   if (!academic_year_id || !name) {
     res.status(400).json({ message: 'Tahun ajaran dan nama semester wajib diisi.' });
@@ -350,15 +350,15 @@ router.post('/semesters', authMiddleware, (req: Request, res: Response) => {
   };
 
   data.semesters.push(newSemester);
-  db.save();
+  await db.save();
 
   res.status(201).json(newSemester);
 });
 
-router.patch('/semesters/:id/set-active', authMiddleware, (req: Request, res: Response) => {
+router.patch('/semesters/:id/set-active', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   data.semesters.forEach(s => s.status = s.id === req.params.id ? 'active' : 'inactive');
-  db.save();
+  await db.save();
   res.json({ message: 'Semester aktif berhasil diperbarui.' });
 });
 
@@ -389,7 +389,7 @@ router.get('/programs/:id', authMiddleware, (req: Request, res: Response) => {
   res.json({ ...prog, sessions });
 });
 
-router.post('/programs', authMiddleware, (req: Request, res: Response) => {
+router.post('/programs', authMiddleware, async (req: Request, res: Response) => {
   const { name, description, duration_months, total_sessions, session_duration_minutes, target_participants, method, media, learning_objectives, competencies } = req.body;
   if (!name) {
     res.status(400).json({ message: 'Nama program wajib diisi.' });
@@ -416,7 +416,7 @@ router.post('/programs', authMiddleware, (req: Request, res: Response) => {
   };
 
   data.programs.push(newProgram);
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Tambah Silabus', `Membuat program silabus baru: ${name}`);
@@ -424,7 +424,7 @@ router.post('/programs', authMiddleware, (req: Request, res: Response) => {
   res.status(201).json(newProgram);
 });
 
-router.put('/programs/:id', authMiddleware, (req: Request, res: Response) => {
+router.put('/programs/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const prog = data.programs.find(p => p.id === req.params.id);
   if (!prog) {
@@ -433,7 +433,7 @@ router.put('/programs/:id', authMiddleware, (req: Request, res: Response) => {
   }
 
   Object.assign(prog, req.body, { updated_at: new Date().toISOString() });
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Edit Silabus Master', `Memperbarui template silabus: ${prog.name}`);
@@ -441,7 +441,7 @@ router.put('/programs/:id', authMiddleware, (req: Request, res: Response) => {
   res.json(prog);
 });
 
-router.delete('/programs/:id', authMiddleware, (req: Request, res: Response) => {
+router.delete('/programs/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const progIndex = data.programs.findIndex(p => p.id === req.params.id);
   if (progIndex === -1) {
@@ -455,7 +455,7 @@ router.delete('/programs/:id', authMiddleware, (req: Request, res: Response) => 
   data.semester_programs = data.semester_programs.filter(sp => sp.program_id !== req.params.id);
   data.school_programs = data.school_programs.filter(sp => sp.program_id !== req.params.id);
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Hapus Silabus', `Menghapus silabus master: ${progName}`);
@@ -463,7 +463,7 @@ router.delete('/programs/:id', authMiddleware, (req: Request, res: Response) => 
   res.json({ message: 'Program / Silabus berhasil dihapus.' });
 });
 
-router.post('/programs/clean-duplicates', authMiddleware, (req: Request, res: Response) => {
+router.post('/programs/clean-duplicates', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const initialCount = data.programs.length;
   const seenNames = new Set<string>();
@@ -485,7 +485,7 @@ router.post('/programs/clean-duplicates', authMiddleware, (req: Request, res: Re
     data.program_sessions = data.program_sessions.filter(s => !removedIds.includes(s.program_id));
     data.semester_programs = data.semester_programs.filter(sp => !removedIds.includes(sp.program_id));
     data.school_programs = data.school_programs.filter(sp => !removedIds.includes(sp.program_id));
-    db.save();
+    await db.save();
   }
 
   const removedCount = initialCount - data.programs.length;
@@ -504,7 +504,7 @@ router.get('/programs/:id/sessions', authMiddleware, (req: Request, res: Respons
   res.json(sessions);
 });
 
-router.post('/programs/:id/sessions', authMiddleware, (req: Request, res: Response) => {
+router.post('/programs/:id/sessions', authMiddleware, async (req: Request, res: Response) => {
   const { session_number, topic_name, practice_1, practice_2, learning_outcome } = req.body;
   if (!session_number || !topic_name) {
     res.status(400).json({ message: 'Nomor pertemuan dan materi wajib diisi.' });
@@ -527,12 +527,12 @@ router.post('/programs/:id/sessions', authMiddleware, (req: Request, res: Respon
   };
 
   data.program_sessions.push(newSess);
-  db.save();
+  await db.save();
 
   res.status(201).json(newSess);
 });
 
-router.put('/program-sessions/:id', authMiddleware, (req: Request, res: Response) => {
+router.put('/program-sessions/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const sess = data.program_sessions.find(s => s.id === req.params.id);
   if (!sess) {
@@ -541,18 +541,18 @@ router.put('/program-sessions/:id', authMiddleware, (req: Request, res: Response
   }
 
   Object.assign(sess, req.body, { updated_at: new Date().toISOString() });
-  db.save();
+  await db.save();
   res.json(sess);
 });
 
-router.delete('/program-sessions/:id', authMiddleware, (req: Request, res: Response) => {
+router.delete('/program-sessions/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   data.program_sessions = data.program_sessions.filter(s => s.id !== req.params.id);
-  db.save();
+  await db.save();
   res.json({ message: 'Sesi silabus berhasil dihapus.' });
 });
 
-router.post('/programs/:id/duplicate', authMiddleware, (req: Request, res: Response) => {
+router.post('/programs/:id/duplicate', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const original = data.programs.find(p => p.id === req.params.id);
   if (!original) {
@@ -584,7 +584,7 @@ router.post('/programs/:id/duplicate', authMiddleware, (req: Request, res: Respo
     });
   });
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Duplikasi Silabus', `Menduplikasi silabus: ${original.name}`);
@@ -645,7 +645,7 @@ router.get('/students/:id', authMiddleware, (req: Request, res: Response) => {
   });
 });
 
-router.post('/students', authMiddleware, (req: Request, res: Response) => {
+router.post('/students', authMiddleware, async (req: Request, res: Response) => {
   const { student_number, nisn, full_name, gender, class_name, school_id, birth_date, parent_name, parent_phone } = req.body;
   if (!student_number || !full_name || !school_id || !class_name) {
     res.status(400).json({ message: 'NIS, nama lengkap, sekolah, dan kelas wajib diisi.' });
@@ -687,7 +687,7 @@ router.post('/students', authMiddleware, (req: Request, res: Response) => {
     created_at: now
   });
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Tambah Siswa', `Menambahkan siswa: ${full_name} (${student_number})`);
@@ -695,7 +695,7 @@ router.post('/students', authMiddleware, (req: Request, res: Response) => {
   res.status(201).json(newStudent);
 });
 
-router.put('/students/:id', authMiddleware, (req: Request, res: Response) => {
+router.put('/students/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const std = data.students.find(s => s.id === req.params.id);
   if (!std) {
@@ -704,7 +704,7 @@ router.put('/students/:id', authMiddleware, (req: Request, res: Response) => {
   }
 
   Object.assign(std, req.body, { updated_at: new Date().toISOString() });
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Edit Siswa', `Memperbarui data siswa: ${std.full_name}`);
@@ -712,7 +712,7 @@ router.put('/students/:id', authMiddleware, (req: Request, res: Response) => {
   res.json(std);
 });
 
-router.patch('/students/:id/toggle-active', authMiddleware, (req: Request, res: Response) => {
+router.patch('/students/:id/toggle-active', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const std = data.students.find(s => s.id === req.params.id);
   if (!std) {
@@ -722,12 +722,12 @@ router.patch('/students/:id/toggle-active', authMiddleware, (req: Request, res: 
 
   std.is_active = !std.is_active;
   std.updated_at = new Date().toISOString();
-  db.save();
+  await db.save();
 
   res.json(std);
 });
 
-router.delete('/students/:id', authMiddleware, (req: Request, res: Response) => {
+router.delete('/students/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const stdIndex = data.students.findIndex(s => s.id === req.params.id);
   if (stdIndex === -1) {
@@ -742,7 +742,7 @@ router.delete('/students/:id', authMiddleware, (req: Request, res: Response) => 
   data.pretest_scores = data.pretest_scores.filter(p => p.student_id !== req.params.id);
   data.practice_assessments = data.practice_assessments.filter(p => p.student_id !== req.params.id);
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Hapus Siswa', `Menghapus siswa: ${std.full_name} (${std.student_number})`);
@@ -750,7 +750,7 @@ router.delete('/students/:id', authMiddleware, (req: Request, res: Response) => 
   res.json({ message: 'Data siswa berhasil dihapus.' });
 });
 
-router.post('/students/clean-duplicates', authMiddleware, (req: Request, res: Response) => {
+router.post('/students/clean-duplicates', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const initialCount = data.students.length;
   const seenKeys = new Set<string>();
@@ -776,7 +776,7 @@ router.post('/students/clean-duplicates', authMiddleware, (req: Request, res: Re
     data.attendances = data.attendances.filter(a => !removedIds.includes(a.student_id));
     data.pretest_scores = data.pretest_scores.filter(p => !removedIds.includes(p.student_id));
     data.practice_assessments = data.practice_assessments.filter(p => !removedIds.includes(p.student_id));
-    db.save();
+    await db.save();
   }
 
   const removedCount = initialCount - data.students.length;
@@ -786,7 +786,7 @@ router.post('/students/clean-duplicates', authMiddleware, (req: Request, res: Re
   res.json({ message: `Berhasil menghapus ${removedCount} siswa duplikat.`, removedCount });
 });
 
-router.post('/students/import-json', authMiddleware, (req: Request, res: Response) => {
+router.post('/students/import-json', authMiddleware, async (req: Request, res: Response) => {
   const { students: importedList, school_id } = req.body;
   if (!Array.isArray(importedList) || importedList.length === 0 || !school_id) {
     res.status(400).json({ message: 'Data siswa dan ID sekolah wajib disediakan.' });
@@ -836,7 +836,7 @@ router.post('/students/import-json', authMiddleware, (req: Request, res: Respons
     insertedCount++;
   });
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Import Siswa Excel', `Berhasil mengimpor ${insertedCount} siswa.`);
@@ -919,7 +919,7 @@ router.get('/meetings/:id', authMiddleware, (req: Request, res: Response) => {
 });
 
 // Generate 12 or 24 weekly meetings automatically
-router.post('/meetings/generate-weekly', authMiddleware, (req: Request, res: Response) => {
+router.post('/meetings/generate-weekly', authMiddleware, async (req: Request, res: Response) => {
   const { school_id, semester_id, start_date } = req.body;
   if (!school_id || !semester_id || !start_date) {
     res.status(400).json({ message: 'Sekolah, semester, dan tanggal mulai wajib diisi.' });
@@ -993,7 +993,7 @@ router.post('/meetings/generate-weekly', authMiddleware, (req: Request, res: Res
     });
   });
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Jadwal Pertemuan Otomatis', `Membuat ${createdMeetings.length} pertemuan mingguan untuk ${school.name}.`);
@@ -1005,7 +1005,7 @@ router.post('/meetings/generate-weekly', authMiddleware, (req: Request, res: Res
   });
 });
 
-router.put('/meetings/:id', authMiddleware, (req: Request, res: Response) => {
+router.put('/meetings/:id', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   const mtg = data.meetings.find(m => m.id === req.params.id);
   if (!mtg) {
@@ -1014,7 +1014,7 @@ router.put('/meetings/:id', authMiddleware, (req: Request, res: Response) => {
   }
 
   Object.assign(mtg, req.body, { updated_at: new Date().toISOString() });
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Edit Pertemuan', `Memperbarui data pertemuan #${mtg.meeting_number} ${mtg.topic_name}`);
@@ -1023,7 +1023,7 @@ router.put('/meetings/:id', authMiddleware, (req: Request, res: Response) => {
 });
 
 // ================= ATTENDANCE =================
-router.post('/meetings/:id/attendance', authMiddleware, (req: Request, res: Response) => {
+router.post('/meetings/:id/attendance', authMiddleware, async (req: Request, res: Response) => {
   const { attendances: inputList } = req.body;
   if (!Array.isArray(inputList)) {
     res.status(400).json({ message: 'Data absensi tidak valid' });
@@ -1053,7 +1053,7 @@ router.post('/meetings/:id/attendance', authMiddleware, (req: Request, res: Resp
     }
   });
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Update Absensi', `Memperbarui data absensi untuk pertemuan ID: ${meetingId}`);
@@ -1062,7 +1062,7 @@ router.post('/meetings/:id/attendance', authMiddleware, (req: Request, res: Resp
 });
 
 // ================= PRETEST =================
-router.post('/meetings/:id/pretest', authMiddleware, (req: Request, res: Response) => {
+router.post('/meetings/:id/pretest', authMiddleware, async (req: Request, res: Response) => {
   const { pretests: inputList } = req.body;
   if (!Array.isArray(inputList)) {
     res.status(400).json({ message: 'Data pretest tidak valid' });
@@ -1092,7 +1092,7 @@ router.post('/meetings/:id/pretest', authMiddleware, (req: Request, res: Respons
     }
   });
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Update Pretest', `Memperbarui nilai pretest pertemuan ID: ${meetingId}`);
@@ -1101,7 +1101,7 @@ router.post('/meetings/:id/pretest', authMiddleware, (req: Request, res: Respons
 });
 
 // ================= PRACTICE ASSESSMENT =================
-router.post('/meetings/:id/practice-assessments', authMiddleware, (req: Request, res: Response) => {
+router.post('/meetings/:id/practice-assessments', authMiddleware, async (req: Request, res: Response) => {
   const { assessments: inputList } = req.body;
   if (!Array.isArray(inputList)) {
     res.status(400).json({ message: 'Data penilaian praktik tidak valid' });
@@ -1154,7 +1154,7 @@ router.post('/meetings/:id/practice-assessments', authMiddleware, (req: Request,
     }
   });
 
-  db.save();
+  await db.save();
 
   const currentUser = (req as any).user;
   db.addAuditLog(currentUser.name, 'Update Nilai Praktik', `Memperbarui nilai praktik pertemuan ID: ${meetingId}`);
@@ -1163,7 +1163,7 @@ router.post('/meetings/:id/practice-assessments', authMiddleware, (req: Request,
 });
 
 // Add meeting note
-router.post('/meetings/:id/notes', authMiddleware, (req: Request, res: Response) => {
+router.post('/meetings/:id/notes', authMiddleware, async (req: Request, res: Response) => {
   const { note_text } = req.body;
   if (!note_text) {
     res.status(400).json({ message: 'Isi catatan tidak boleh kosong.' });
@@ -1181,13 +1181,13 @@ router.post('/meetings/:id/notes', authMiddleware, (req: Request, res: Response)
   };
 
   data.meeting_notes.push(newNote);
-  db.save();
+  await db.save();
 
   res.status(201).json(newNote);
 });
 
 // Add documentation photo
-router.post('/meetings/:id/documentation', authMiddleware, (req: Request, res: Response) => {
+router.post('/meetings/:id/documentation', authMiddleware, async (req: Request, res: Response) => {
   const { title, file_url } = req.body;
   if (!title || !file_url) {
     res.status(400).json({ message: 'Judul dan URL foto/dokumen wajib diisi.' });
@@ -1204,7 +1204,7 @@ router.post('/meetings/:id/documentation', authMiddleware, (req: Request, res: R
   };
 
   data.meeting_documentations.push(newDoc);
-  db.save();
+  await db.save();
 
   res.status(201).json(newDoc);
 });
@@ -1371,10 +1371,10 @@ router.get('/settings', authMiddleware, (req: Request, res: Response) => {
   res.json(data.settings);
 });
 
-router.put('/settings', authMiddleware, (req: Request, res: Response) => {
+router.put('/settings', authMiddleware, async (req: Request, res: Response) => {
   const data = db.getRawData();
   Object.assign(data.settings, req.body);
-  db.save();
+  await db.save();
   res.json(data.settings);
 });
 

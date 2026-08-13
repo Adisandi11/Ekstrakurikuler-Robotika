@@ -109,9 +109,6 @@ export async function fetchFromFirestore(): Promise<any | null> {
   return null;
 }
 
-let saveTimeout: NodeJS.Timeout | null = null;
-let latestDataToSave: any = null;
-
 function sanitizeDataForFirestore(data: any): any {
   if (!data || typeof data !== 'object') return data;
   const cloned = JSON.parse(JSON.stringify(data));
@@ -124,35 +121,23 @@ function sanitizeDataForFirestore(data: any): any {
 }
 
 export async function saveToFirestore(data: any): Promise<boolean> {
-  if (!canAttemptCloudSync()) return false;
+  if (!canAttemptCloudSync() || !firestore) return false;
 
-  latestDataToSave = sanitizeDataForFirestore(data);
-
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
+  try {
+    const sanitized = sanitizeDataForFirestore(data);
+    const docRef = doc(firestore, 'app_data', 'main');
+    await setDoc(docRef, sanitized);
+    isQuotaExhausted = false; // Successfully saved to cloud!
+    console.log('☁️ Data saved to Firestore successfully.');
+    return true;
+  } catch (err: any) {
+    if (isQuotaError(err)) {
+      handleQuotaExhausted(err);
+    } else {
+      console.error('Error saving to Firestore:', err);
+    }
+    return false;
   }
-
-  return new Promise((resolve) => {
-    saveTimeout = setTimeout(async () => {
-      if (!firestore || !latestDataToSave || !canAttemptCloudSync()) {
-        resolve(false);
-        return;
-      }
-      try {
-        const docRef = doc(firestore!, 'app_data', 'main');
-        await setDoc(docRef, latestDataToSave);
-        isQuotaExhausted = false; // Successfully saved to cloud!
-        resolve(true);
-      } catch (err: any) {
-        if (isQuotaError(err)) {
-          handleQuotaExhausted(err);
-        } else {
-          console.error('Error saving to Firestore:', err);
-        }
-        resolve(false);
-      }
-    }, 1500);
-  });
 }
 
 

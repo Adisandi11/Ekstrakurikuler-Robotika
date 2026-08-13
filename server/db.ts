@@ -117,10 +117,10 @@ class JSONDatabase {
       console.error('Error during Firestore sync:', err);
     }
     this.isSyncing = false;
-    this.normalizeDataStructures();
+    await this.normalizeDataStructures();
   }
 
-  private normalizeDataStructures() {
+  private async normalizeDataStructures() {
     if (!this.data) return;
 
     const now = new Date().toISOString();
@@ -249,17 +249,19 @@ class JSONDatabase {
     }
 
     if (hasModified) {
-      this.saveData();
+      await this.saveData();
     }
   }
 
-  private saveData(dataToSave?: DatabaseSchema) {
+  private async saveData(dataToSave?: DatabaseSchema) {
     const target = dataToSave || this.data;
-    fs.writeFileSync(DB_FILE, JSON.stringify(target, null, 2), 'utf-8');
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(target, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Error writing DB file:', e);
+    }
     if (!this.isSyncing) {
-      saveToFirestore(target).catch(err => {
-        console.error('Failed to save to Firestore in background:', err);
-      });
+      await saveToFirestore(target);
     }
   }
 
@@ -267,8 +269,8 @@ class JSONDatabase {
     return this.data;
   }
 
-  public save() {
-    this.saveData();
+  public async save() {
+    await this.saveData();
   }
 
   public getUsers(): User[] {
