@@ -69,15 +69,29 @@ export function calculatePracticeAssessment(
 
 class JSONDatabase {
   private data: DatabaseSchema;
+  private isSyncing = true;
 
   constructor() {
-    this.data = this.loadOrCreate();
-    this.cleanDuplicateMeetingsAndNormalize();
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        const raw = fs.readFileSync(DB_FILE, 'utf-8');
+        this.data = JSON.parse(raw);
+      } catch (e) {
+        console.error('Error reading database file, using seed:', e);
+        this.data = this.getInitialSeed();
+      }
+    } else {
+      this.data = this.getInitialSeed();
+    }
     this.initFirestoreSync();
   }
 
   private async initFirestoreSync() {
-    if (!firestore) return;
+    if (!firestore) {
+      this.isSyncing = false;
+      this.cleanDuplicateMeetingsAndNormalize();
+      return;
+    }
     try {
       const cloudData = await fetchFromFirestore();
       if (cloudData && typeof cloudData === 'object' && cloudData.users) {
@@ -91,6 +105,8 @@ class JSONDatabase {
     } catch (err) {
       console.error('Error during Firestore sync:', err);
     }
+    this.isSyncing = false;
+    this.cleanDuplicateMeetingsAndNormalize();
   }
 
   private cleanDuplicateMeetingsAndNormalize() {
@@ -248,26 +264,14 @@ class JSONDatabase {
     this.saveData();
   }
 
-  private loadOrCreate(): DatabaseSchema {
-    if (fs.existsSync(DB_FILE)) {
-      try {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        return JSON.parse(raw);
-      } catch (e) {
-        console.error('Error reading database file, re-initializing seed:', e);
-      }
-    }
-    const seeded = this.getInitialSeed();
-    this.saveData(seeded);
-    return seeded;
-  }
-
   private saveData(dataToSave?: DatabaseSchema) {
     const target = dataToSave || this.data;
     fs.writeFileSync(DB_FILE, JSON.stringify(target, null, 2), 'utf-8');
-    saveToFirestore(target).catch(err => {
-      console.error('Failed to save to Firestore in background:', err);
-    });
+    if (!this.isSyncing) {
+      saveToFirestore(target).catch(err => {
+        console.error('Failed to save to Firestore in background:', err);
+      });
+    }
   }
 
   public getRawData(): DatabaseSchema {
