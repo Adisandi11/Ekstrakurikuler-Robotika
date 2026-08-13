@@ -21,6 +21,16 @@ router.get('/firebase-status', (req: Request, res: Response) => {
   });
 });
 
+// Middleware to ensure DB initial sync with Firestore completes before processing requests
+router.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await db.ensureSynced();
+  } catch (err) {
+    console.error('Error waiting for DB sync:', err);
+  }
+  next();
+});
+
 // Middleware Authentication
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;

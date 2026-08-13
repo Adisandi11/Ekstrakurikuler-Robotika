@@ -8,9 +8,44 @@ let isQuotaExhausted = false;
 let lastQuotaErrorTime = 0;
 
 try {
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(configPath)) {
-    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+  let firebaseConfig: any = null;
+
+  // 1. Check environment variable FIREBASE_CONFIG or FIREBASE_APPLET_CONFIG
+  const envConfigStr = process.env.FIREBASE_CONFIG || process.env.FIREBASE_APPLET_CONFIG;
+  if (envConfigStr) {
+    try {
+      firebaseConfig = JSON.parse(envConfigStr);
+    } catch (e) {
+      console.error('Error parsing FIREBASE_CONFIG env var:', e);
+    }
+  }
+
+  // 2. Check local file firebase-applet-config.json
+  if (!firebaseConfig) {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      try {
+        firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      } catch (e) {
+        console.error('Error reading firebase-applet-config.json:', e);
+      }
+    }
+  }
+
+  // 3. Check individual env variables
+  if (!firebaseConfig && (process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID)) {
+    firebaseConfig = {
+      projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
+      apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY,
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN,
+      firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || 'ai-studio-sistemekstrakuri-93f064cc-29b0-42f5-a110-dcd07fb8859e',
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID,
+    };
+  }
+
+  if (firebaseConfig) {
     const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     if (firebaseConfig.firestoreDatabaseId) {
       dbInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -18,6 +53,8 @@ try {
       dbInstance = getFirestore(app);
     }
     console.log('🔥 Firebase initialized successfully with project:', firebaseConfig.projectId);
+  } else {
+    console.warn('⚠️ No Firebase config found!');
   }
 } catch (err) {
   console.error('Error initializing Firebase:', err);

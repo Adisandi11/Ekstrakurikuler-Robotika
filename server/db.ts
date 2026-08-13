@@ -70,6 +70,7 @@ export function calculatePracticeAssessment(
 class JSONDatabase {
   private data: DatabaseSchema;
   private isSyncing = true;
+  private syncPromise: Promise<void>;
 
   constructor() {
     if (fs.existsSync(DB_FILE)) {
@@ -83,40 +84,52 @@ class JSONDatabase {
     } else {
       this.data = this.getInitialSeed();
     }
-    this.initFirestoreSync();
+    this.syncPromise = this.initFirestoreSync();
+  }
+
+  public async ensureSynced(): Promise<void> {
+    if (this.syncPromise) {
+      await this.syncPromise;
+    }
   }
 
   private async initFirestoreSync() {
     if (!firestore) {
       this.isSyncing = false;
-      this.cleanDuplicateMeetingsAndNormalize();
+      this.normalizeDataStructures();
       return;
     }
     try {
       const cloudData = await fetchFromFirestore();
-      if (cloudData && typeof cloudData === 'object' && cloudData.users) {
+      if (cloudData && typeof cloudData === 'object' && Array.isArray(cloudData.schools) && cloudData.schools.length > 0) {
+        console.log('✅ Synchronized dataset from Firebase Firestore!');
+        this.data = cloudData as DatabaseSchema;
+        fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+      } else if (cloudData && typeof cloudData === 'object' && cloudData.users && cloudData.users.length > 0) {
         console.log('✅ Synchronized dataset from Firebase Firestore!');
         this.data = cloudData as DatabaseSchema;
         fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
       } else {
-        console.log('📤 Firestore empty, uploading local dataset to Firebase Firestore...');
+        console.log('📤 Firestore empty, uploading current dataset to Firebase Firestore...');
         await saveToFirestore(this.data);
       }
     } catch (err) {
       console.error('Error during Firestore sync:', err);
     }
     this.isSyncing = false;
-    this.cleanDuplicateMeetingsAndNormalize();
+    this.normalizeDataStructures();
   }
 
-  private cleanDuplicateMeetingsAndNormalize() {
+  private normalizeDataStructures() {
     if (!this.data) return;
 
     const now = new Date().toISOString();
+    let hasModified = false;
 
     // Ensure prog-scratch exists in programs
     if (!Array.isArray(this.data.programs)) this.data.programs = [];
     if (!this.data.programs.some(p => p.id === 'prog-scratch')) {
+      hasModified = true;
       this.data.programs.push({
         id: 'prog-scratch',
         name: 'Pembelajaran Scratch (Semester 2)',
@@ -171,6 +184,7 @@ class JSONDatabase {
 
     scratchSessions.forEach(sess => {
       if (!this.data.program_sessions.some(s => s.id === sess.id)) {
+        hasModified = true;
         this.data.program_sessions.push(sess);
       }
     });
@@ -178,6 +192,7 @@ class JSONDatabase {
     // Ensure semester_programs for Semester 2 has Scratch
     if (!Array.isArray(this.data.semester_programs)) this.data.semester_programs = [];
     if (!this.data.semester_programs.some(sp => sp.program_id === 'prog-scratch')) {
+      hasModified = true;
       this.data.semester_programs.push({
         id: 'semprog-scratch',
         semester_id: 'sem-2-2027',
@@ -191,6 +206,7 @@ class JSONDatabase {
     // Ensure school_programs for Semester 2 has Scratch
     if (!Array.isArray(this.data.school_programs)) this.data.school_programs = [];
     if (!this.data.school_programs.some(sp => sp.program_id === 'prog-scratch' && sp.school_id === 'sch-1')) {
+      hasModified = true;
       this.data.school_programs.push({
         id: 'sp-scratch-sch-1',
         school_id: 'sch-1',
@@ -202,6 +218,7 @@ class JSONDatabase {
     }
 
     if (!this.data.school_programs.some(sp => sp.program_id === 'prog-scratch' && sp.school_id === 'sch-2')) {
+      hasModified = true;
       this.data.school_programs.push({
         id: 'sp-scratch-sch-2',
         school_id: 'sch-2',
@@ -212,56 +229,28 @@ class JSONDatabase {
       });
     }
 
-    // Filter duplicate meetings
+    // Ensure all required arrays exist
+    if (!Array.isArray(this.data.students)) this.data.students = [];
+    if (!Array.isArray(this.data.schools)) this.data.schools = [];
     if (!Array.isArray(this.data.meetings)) this.data.meetings = [];
-    const seenMap = new Map<string, Meeting>();
-    const cleanedMeetings: Meeting[] = [];
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    if (!Array.isArray(this.data.enrollments)) this.data.enrollments = [];
 
+    // Filter exact duplicate meetings with same id
+    const uniqueMeetingsMap = new Map<string, Meeting>();
     for (const mtg of this.data.meetings) {
-      const key = `${mtg.school_id}_${mtg.meeting_number}`;
-      if (!seenMap.has(key)) {
-        seenMap.set(key, mtg);
-        cleanedMeetings.push(mtg);
-      } else {
-        const existing = seenMap.get(key)!;
-        if (existing.status !== 'completed' && mtg.status === 'completed') {
-          const idx = cleanedMeetings.findIndex(m => m.id === existing.id);
-          if (idx !== -1) {
-            cleanedMeetings[idx] = mtg;
-            seenMap.set(key, mtg);
-          }
-        }
+      if (!uniqueMeetingsMap.has(mtg.id)) {
+        uniqueMeetingsMap.set(mtg.id, mtg);
       }
     }
+    if (uniqueMeetingsMap.size !== this.data.meetings.length) {
+      this.data.meetings = Array.from(uniqueMeetingsMap.values());
+      hasModified = true;
+    }
 
-    // Set dates and statuses according to exact user dates:
-    // SDIT RMK (sch-1): First meeting starts on 17 July 2026 (2026-07-17)
-    // SDN 1 Darma (sch-2): Start date not decided yet (Belum Ditentukan)
-    let rmkCurrentDate = new Date('2026-07-17');
-
-    // Separate meetings by school
-    const sch1Meetings = cleanedMeetings.filter(m => m.school_id === 'sch-1').sort((a, b) => a.meeting_number - b.meeting_number);
-    const sch2Meetings = cleanedMeetings.filter(m => m.school_id === 'sch-2').sort((a, b) => a.meeting_number - b.meeting_number);
-    const otherMeetings = cleanedMeetings.filter(m => m.school_id !== 'sch-1' && m.school_id !== 'sch-2');
-
-    sch1Meetings.forEach((mtg, idx) => {
-      const d = new Date('2026-07-17');
-      d.setDate(d.getDate() + (idx * 7));
-      mtg.meeting_date = d.toISOString().split('T')[0];
-      if (mtg.meeting_number <= 4) {
-        mtg.status = 'completed';
-      } else {
-        mtg.status = 'scheduled';
-      }
-    });
-
-    sch2Meetings.forEach((mtg) => {
-      mtg.meeting_date = 'Belum Ditentukan';
-      mtg.status = 'scheduled';
-    });
-
-    this.data.meetings = [...sch1Meetings, ...sch2Meetings, ...otherMeetings];
-    this.saveData();
+    if (hasModified) {
+      this.saveData();
+    }
   }
 
   private saveData(dataToSave?: DatabaseSchema) {
